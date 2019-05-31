@@ -331,7 +331,6 @@ internal abstract class AbstractSendChannel<E> : SendChannel<E> {
             previous as Receive<E> // type assertion
             previous.resumeReceiveClosed(closed)
         }
-
         onClosedIdempotent(closed)
     }
 

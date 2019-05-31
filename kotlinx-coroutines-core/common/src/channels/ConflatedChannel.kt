@@ -24,10 +24,6 @@ internal open class ConflatedChannel<E> : AbstractChannel<E>() {
     protected final override val isBufferAlwaysFull: Boolean get() = false
     protected final override val isBufferFull: Boolean get() = false
 
-    override fun onClosedIdempotent(closed: LockFreeLinkedListNode) {
-        conflatePreviousSendBuffered(closed)
-    }
-
     // result is always `OFFER_SUCCESS | Closed`
     protected override fun offerInternal(element: E): Any {
         while (true) {
@@ -35,20 +31,13 @@ internal open class ConflatedChannel<E> : AbstractChannel<E>() {
             when {
                 result === OFFER_SUCCESS -> return OFFER_SUCCESS
                 result === OFFER_FAILED -> { // try to buffer
-                    val sendResult = sendConflated(element)
-                    when (sendResult) {
+                    when (val sendResult = sendConflated(element)) {
                         null -> return OFFER_SUCCESS
-                        is Closed<*> -> {
-                            conflatePreviousSendBuffered(sendResult)
-                            return sendResult
-                        }
+                        is Closed<*> -> return sendResult
                     }
                     // otherwise there was receiver in queue, retry super.offerInternal
                 }
-                result is Closed<*> -> {
-                    conflatePreviousSendBuffered(result)
-                    return result
-                }
+                result is Closed<*> -> return result
                 else -> error("Invalid offerInternal result $result")
             }
         }
@@ -64,10 +53,7 @@ internal open class ConflatedChannel<E> : AbstractChannel<E>() {
                 result === ALREADY_SELECTED -> return ALREADY_SELECTED
                 result === OFFER_SUCCESS -> return OFFER_SUCCESS
                 result === OFFER_FAILED -> {} // retry
-                result is Closed<*> -> {
-                    conflatePreviousSendBuffered(result)
-                    return result
-                }
+                result is Closed<*> -> return result
                 else -> error("Invalid result $result")
             }
         }
